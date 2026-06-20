@@ -1,0 +1,18 @@
+[project]
+name = "onsetto-client"
+version = "0.1.0"
+description = "A REST client for Onsetto's technical challenge."
+readme = "README.md"
+authors = [
+    { name = "Will Mooney", email = "will.mooney.3@protonmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "httpx>=0.28.1",
+    "pydantic>=2.13.4",
+    "tenacity>=9.1.4",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.21,<0.12.0"]
+build-backend = "uv_build"
