@@ -6,13 +6,13 @@ dependencies = []
 
 [tool.uv.workspace]
 members = [
-    "packages/onsetto-scraper",
-    "packages/onsetto-client",
+    "onsetto-client",
+    "onsetto-scraper",
 ]
 
 [tool.uv.sources]
-onsetto-scraper = { workspace = true, editable = true }
 onsetto-client = { workspace = true, editable = true }
+onsetto-scraper = { workspace = true, editable = true }
 
 [dependency-groups]
 dev = [
