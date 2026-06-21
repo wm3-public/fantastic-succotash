@@ -1,12 +1,11 @@
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import pytest
-from playwright.async_api import Browser, Page, async_playwright
-
 from onsetto_scraper.config import ScraperConfig
 from onsetto_scraper.luhn import luhn_generate
 from onsetto_scraper.models.banking import BankingDetails
 from onsetto_scraper.models.payment import PaymentMethod
+from playwright.async_api import Browser, Page, async_playwright
 
 
 @pytest.fixture(scope="session")
@@ -15,7 +14,7 @@ def scraper_config() -> ScraperConfig:
 
 
 @pytest.fixture(scope="session")
-async def browser(scraper_config: ScraperConfig) -> AsyncGenerator[Browser, None]:
+async def browser(scraper_config: ScraperConfig) -> AsyncGenerator[Browser]:
     pw = await async_playwright().start()
     b = await pw.chromium.launch(
         headless=scraper_config.headless,
@@ -27,7 +26,7 @@ async def browser(scraper_config: ScraperConfig) -> AsyncGenerator[Browser, None
 
 
 @pytest.fixture
-async def page(browser: Browser) -> AsyncGenerator[Page, None]:
+async def page(browser: Browser) -> AsyncGenerator[Page]:
     ctx = await browser.new_context()
     pg = await ctx.new_page()
     yield pg
