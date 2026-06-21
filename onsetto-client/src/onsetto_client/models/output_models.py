@@ -15,7 +15,7 @@ class AuthResponse(BaseModel):
 
 class BankAccountUpdatedResponse(BaseModel):
     account_masked: str
-    routing_number: str
+    routing_masked: str
     token: str
 
 
@@ -24,7 +24,7 @@ class ListingResponse(BaseModel):
     category: str
     seller_id: UUID
     title: str
-    total: float
+    price: float
 
 
 class MFAResponse(BaseModel):

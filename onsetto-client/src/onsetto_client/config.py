@@ -7,5 +7,8 @@ class ClientConfig(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="", populate_by_name=True)
 
-    base_url: str = Field(alias="ONSETTO_API_BASE_URL")
+    base_url: str = Field(
+        default="https://zvyhufnwclhcvmgtqxwp.supabase.co/functions/v1/api-v1",
+        alias="ONSETTO_API_BASE_URL",
+    )
     timeout: float = 10.0

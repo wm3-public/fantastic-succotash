@@ -36,5 +36,11 @@ class SensitiveDataFilter(logging.Filter):
         """
         message = record.getMessage()
         for pattern in REDACT_PATTERNS.values():
-            message = pattern.sub()
+            message = pattern.sub(REDACT_CHARACTER, message)
+        record.msg = message
+        record.args = ()
         return True
+
+
+logger = logging.getLogger("onsetto_client")
+logger.addFilter(SensitiveDataFilter())

@@ -371,8 +371,8 @@ dev = [
 [package.metadata.requires-dev]
 dev = [
     { name = "mypy", specifier = ">=2.1.0" },
-    { name = "onsetto-client", editable = "packages/onsetto-client" },
-    { name = "onsetto-scraper", editable = "packages/onsetto-scraper" },
+    { name = "onsetto-client", editable = "onsetto-client" },
+    { name = "onsetto-scraper", editable = "onsetto-scraper" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "ruff", specifier = ">=0.15.18" },
@@ -381,7 +381,7 @@ dev = [
 [[package]]
 name = "onsetto-client"
 version = "0.1.0"
-source = { editable = "packages/onsetto-client" }
+source = { editable = "onsetto-client" }
 dependencies = [
     { name = "httpx" },
     { name = "pydantic" },
@@ -400,7 +400,7 @@ requires-dist = [
 [[package]]
 name = "onsetto-scraper"
 version = "0.1.0"
-source = { editable = "packages/onsetto-scraper" }
+source = { editable = "onsetto-scraper" }
 dependencies = [
     { name = "playwright" },
     { name = "python-dotenv" },
