@@ -26,54 +26,78 @@ def account_page(config: ScraperConfig) -> AccountPage:
     return AccountPage(mock_page, config)
 
 
+def _stub_expect(monkeypatch: pytest.MonkeyPatch, *, raises: bool) -> None:
+    """Patch playwright.expect in account_page to succeed or fail without a real browser."""
+    mock_assertions = MagicMock()
+    if raises:
+        mock_assertions.to_contain_text = AsyncMock(side_effect=Exception("not found"))
+    else:
+        mock_assertions.to_contain_text = AsyncMock()
+    monkeypatch.setattr("onsetto_scraper.pages.account_page.expect", lambda _: mock_assertions)
+
+
+def _stub_locator_inner_text(account_page: AccountPage, text: str) -> None:
+    """Make _page.locator().inner_text() return *text* (needed for error-path messages)."""
+    account_page._page.locator.return_value.inner_text = AsyncMock(return_value=text)
+
+
+# ── verify_banking_saved ────────────────────────────────────────────────────
+
 async def test_verify_banking_saved_passes_when_last4_in_summary(
-    account_page: AccountPage, banking_details: BankingDetails
+    account_page: AccountPage, banking_details: BankingDetails, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    last4 = banking_details.account_number[-4:]
-    account_page._get_text = AsyncMock(return_value=f"Account ending {last4} updated 2024-01-01")
+    _stub_expect(monkeypatch, raises=False)
     await account_page.verify_banking_saved(banking_details)  # should not raise
 
 
 async def test_verify_banking_saved_raises_on_empty_summary(
-    account_page: AccountPage, banking_details: BankingDetails
+    account_page: AccountPage, banking_details: BankingDetails, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    account_page._get_text = AsyncMock(return_value="   ")
-    with pytest.raises(VerificationError, match="empty"):
+    _stub_expect(monkeypatch, raises=True)
+    _stub_locator_inner_text(account_page, "")
+    with pytest.raises(VerificationError):
         await account_page.verify_banking_saved(banking_details)
 
 
 async def test_verify_banking_saved_raises_when_last4_absent(
-    account_page: AccountPage, banking_details: BankingDetails
+    account_page: AccountPage, banking_details: BankingDetails, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    account_page._get_text = AsyncMock(return_value="Account ending 0000 updated")
     last4 = banking_details.account_number[-4:]
+    _stub_expect(monkeypatch, raises=True)
+    _stub_locator_inner_text(account_page, "Account ending 0000 updated")
     with pytest.raises(VerificationError, match=last4):
         await account_page.verify_banking_saved(banking_details)
 
 
+# ── verify_payment_saved ────────────────────────────────────────────────────
+
 async def test_verify_payment_saved_passes_when_last4_in_summary(
-    account_page: AccountPage, payment_method: PaymentMethod
+    account_page: AccountPage, payment_method: PaymentMethod, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    last4 = payment_method.card_number[-4:]
-    account_page._get_text = AsyncMock(return_value=f"Card ending {last4} saved")
+    _stub_expect(monkeypatch, raises=False)
     await account_page.verify_payment_saved(payment_method)  # should not raise
 
 
 async def test_verify_payment_saved_raises_on_empty_summary(
-    account_page: AccountPage, payment_method: PaymentMethod
+    account_page: AccountPage, payment_method: PaymentMethod, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    account_page._get_text = AsyncMock(return_value="")
-    with pytest.raises(VerificationError, match="empty"):
+    _stub_expect(monkeypatch, raises=True)
+    _stub_locator_inner_text(account_page, "")
+    with pytest.raises(VerificationError):
         await account_page.verify_payment_saved(payment_method)
 
 
 async def test_verify_payment_saved_raises_when_last4_absent(
-    account_page: AccountPage, payment_method: PaymentMethod
+    account_page: AccountPage, payment_method: PaymentMethod, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    account_page._get_text = AsyncMock(return_value="Card ending 0000 saved")
-    with pytest.raises(VerificationError):
+    last4 = payment_method.card_number[-4:]
+    _stub_expect(monkeypatch, raises=True)
+    _stub_locator_inner_text(account_page, "Card ending 0000 saved")
+    with pytest.raises(VerificationError, match=last4):
         await account_page.verify_payment_saved(payment_method)
 
+
+# ── fill_banking_details ────────────────────────────────────────────────────
 
 async def test_fill_banking_details_uses_correct_selectors(
     account_page: AccountPage, banking_details: BankingDetails
@@ -106,38 +130,50 @@ async def test_fill_banking_details_passes_correct_values(
     assert ('[data-testid="bank-account"]', banking_details.account_number) in fills
 
 
+# ── fill_payment_method ─────────────────────────────────────────────────────
+
+@pytest.fixture
+def mock_card_locator() -> MagicMock:
+    loc = MagicMock()
+    loc.click = AsyncMock()
+    loc.press_sequentially = AsyncMock()
+    return loc
+
+
 async def test_fill_payment_method_uses_correct_selectors(
-    account_page: AccountPage, payment_method: PaymentMethod
+    account_page: AccountPage, payment_method: PaymentMethod, mock_card_locator: MagicMock
 ) -> None:
-    fills: list[tuple[str, str]] = []
+    account_page._fill = AsyncMock()  # type: ignore[method-assign]
+    account_page._page.locator.return_value = mock_card_locator
 
-    async def capture(selector: str, value: str) -> None:
-        fills.append((selector, value))
-
-    account_page._fill = capture  # type: ignore[method-assign]
     await account_page.fill_payment_method(payment_method)
 
-    selectors = [s for s, _ in fills]
-    assert '[data-testid="card-holder"]' in selectors
-    assert '[data-testid="card-number"]' in selectors
-    assert '[data-testid="card-exp-month"]' in selectors
-    assert '[data-testid="card-exp-year"]' in selectors
-    assert '[data-testid="card-cvc"]' in selectors
+    # cardholder filled via _fill
+    account_page._fill.assert_any_call('[data-testid="card-holder"]', payment_method.cardholder_name)  # type: ignore[attr-defined]
+
+    # card fields interacted via locator
+    locator_selectors = [call.args[0] for call in account_page._page.locator.call_args_list]
+    assert '[data-testid="card-number"]' in locator_selectors
+    assert '[data-testid="card-exp-month"]' in locator_selectors
+    assert '[data-testid="card-exp-year"]' in locator_selectors
+    assert '[data-testid="card-cvc"]' in locator_selectors
 
 
-async def test_fill_payment_method_formats_card_in_groups_of_4(
-    account_page: AccountPage, payment_method: PaymentMethod
+async def test_fill_payment_method_types_raw_card_digits(
+    account_page: AccountPage, payment_method: PaymentMethod, mock_card_locator: MagicMock
 ) -> None:
-    fills: dict[str, str] = {}
+    """Card number is passed as raw digits (no spaces); the UI component formats them."""
+    typed: list[str] = []
 
-    async def capture(selector: str, value: str) -> None:
-        fills[selector] = value
+    async def capture_sequential(value: str, **_kwargs: object) -> None:
+        typed.append(value)
 
-    account_page._fill = capture  # type: ignore[method-assign]
+    mock_card_locator.press_sequentially = capture_sequential
+    account_page._fill = AsyncMock()  # type: ignore[method-assign]
+    account_page._page.locator.return_value = mock_card_locator
+
     await account_page.fill_payment_method(payment_method)
 
-    card_value = fills['[data-testid="card-number"]']
-    # Digits should be space-separated in groups of 4
-    assert " " in card_value
-    digits_only = card_value.replace(" ", "")
-    assert digits_only == payment_method.card_number
+    assert payment_method.card_number in typed
+    # Raw digits only — no space-formatted groups
+    assert not any(" " in v for v in typed)
