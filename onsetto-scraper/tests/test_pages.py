@@ -43,6 +43,7 @@ def _stub_locator_inner_text(account_page: AccountPage, text: str) -> None:
 
 # ── verify_banking_saved ────────────────────────────────────────────────────
 
+
 async def test_verify_banking_saved_passes_when_last4_in_summary(
     account_page: AccountPage, banking_details: BankingDetails, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -71,6 +72,7 @@ async def test_verify_banking_saved_raises_when_last4_absent(
 
 # ── verify_payment_saved ────────────────────────────────────────────────────
 
+
 async def test_verify_payment_saved_passes_when_last4_in_summary(
     account_page: AccountPage, payment_method: PaymentMethod, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -98,6 +100,7 @@ async def test_verify_payment_saved_raises_when_last4_absent(
 
 
 # ── fill_banking_details ────────────────────────────────────────────────────
+
 
 async def test_fill_banking_details_uses_correct_selectors(
     account_page: AccountPage, banking_details: BankingDetails
@@ -131,6 +134,7 @@ async def test_fill_banking_details_passes_correct_values(
 
 
 # ── fill_payment_method ─────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def mock_card_locator() -> MagicMock:
