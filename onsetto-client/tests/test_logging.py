@@ -5,8 +5,13 @@ from onsetto_client.logging import SensitiveDataFilter
 
 def _apply_filter(message: str) -> str:
     record = logging.LogRecord(
-        name="test", level=logging.INFO, pathname="", lineno=0,
-        msg=message, args=(), exc_info=None,
+        name="test",
+        level=logging.INFO,
+        pathname="",
+        lineno=0,
+        msg=message,
+        args=(),
+        exc_info=None,
     )
     SensitiveDataFilter().filter(record)
     return record.msg
@@ -70,7 +75,7 @@ def test_card_number_19_digits_redacted() -> None:
 
 
 def test_cvc_4_digits_redacted() -> None:
-    # Amex uses a 4-digit CVC
+    # Amex annoyingly uses a 4-digit CVC
     result = _apply_filter("cvc: 1234 submitted")
     assert "1234" not in result
 
@@ -91,6 +96,5 @@ def test_multiple_sensitive_fields_all_redacted() -> None:
 
 def test_filter_applied_to_module_logger() -> None:
     import onsetto_client.logging as ol
-    assert any(
-        isinstance(f, SensitiveDataFilter) for f in ol.logger.filters
-    )
+
+    assert any(isinstance(f, SensitiveDataFilter) for f in ol.logger.filters)

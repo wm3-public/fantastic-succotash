@@ -1,5 +1,4 @@
 import pytest
-
 from onsetto_client import OnsettoClient
 from onsetto_client.config import ClientConfig
 

@@ -20,6 +20,22 @@ dev = [
     "onsetto-client",
     "onsetto-scraper",
     "pytest>=9.1.1",
+    "pytest-asyncio>=0.24",
     "pytest-cov>=7.1.0",
+    "pytest-httpx>=0.35",
+    "pytest-playwright>=0.6",
     "ruff>=0.15.18",
 ]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+explicit_package_bases = true
+mypy_path = "onsetto-client/src:onsetto-scraper/src"

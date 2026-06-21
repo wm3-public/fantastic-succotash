@@ -9,8 +9,27 @@ authors = [
 requires-python = ">=3.13"
 dependencies = [
     "playwright>=1.60.0",
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.14.2",
     "python-dotenv>=1.2.2",
+    "tenacity>=9.1.4",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9",
+    "pytest-asyncio>=0.24",
+    "pytest-playwright>=0.6",
+]
+
+[project.scripts]
+onsetto-scraper = "onsetto_scraper.__main__:main"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+addopts = "-v -m 'not integration'"
+markers = ["integration: requires a live app and credentials (deselected by default)"]
 
 [build-system]
 requires = ["uv_build>=0.11.21,<0.12.0"]

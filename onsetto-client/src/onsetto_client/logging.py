@@ -3,7 +3,6 @@
 import logging
 import re
 
-
 REDACT_CHARACTER: str = "*"
 REDACT_PATTERNS: dict[str, re.Pattern[str]] = {
     "card_number": re.compile(r"\b(?:\d[ -]*?){13,19}\b"),
@@ -14,15 +13,13 @@ REDACT_PATTERNS: dict[str, re.Pattern[str]] = {
 
 
 class SensitiveDataFilter(logging.Filter):
-    """We have SensitiveModel configured in the models directory, but when I
-    worked at American Greetings, we had people accidentally put card numbers
-    in the name fields, etc. This is the last chance to prevent logging
-    anything that _looks_ like sensitive information.
+    """Last-chance redaction for anything that looks like PCI-sensitive data.
 
-    Also, since this is a technical challenge, I'm sticking with only flat
-    fields here, but I'm aware there is a limitation on this function that
-    would miss things like extra={"account": {"routing": "####"}}, so this
-    isn't production ready. Just wanted to call that out. :-)
+    Covers cases where sensitive values are inadvertently placed in free-text
+    fields (e.g. a card number typed into a name field). Note: only flat
+    string-formatted log messages are scanned. Nested structures passed as
+    `extra` dicts bypass this filter and must be sanitised upstream (known
+    limitation for this exercise).
     """
 
     def filter(self, record: logging.LogRecord) -> bool:

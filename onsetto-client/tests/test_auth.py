@@ -1,8 +1,9 @@
-import pytest
-from pytest_httpx import HTTPXMock
+import json
 
-from onsetto_client import OnsettoClient, AuthenticationError, NotAuthenticatedError
+import pytest
+from onsetto_client import AuthenticationError, NotAuthenticatedError, OnsettoClient
 from onsetto_client.config import ClientConfig
+from pytest_httpx import HTTPXMock
 
 BASE_URL = "http://test"
 
@@ -44,7 +45,7 @@ def test_authenticate_sends_correct_credentials(httpx_mock: HTTPXMock, fresh_cli
     fresh_client.authenticate("user@example.com", "s3cr3t", "1234")
 
     token_request = httpx_mock.get_requests()[0]
-    import json
+
     body = json.loads(token_request.content)
     assert body["email"] == "user@example.com"
     assert body["password"] == "s3cr3t"
@@ -91,11 +92,15 @@ def test_not_authenticated_raises(unauthenticated_client: OnsettoClient) -> None
 
 
 def test_context_manager_closes_client(httpx_mock: HTTPXMock) -> None:
-    httpx_mock.add_response(method="GET", url=f"{BASE_URL}/me", json={
-        "id": "00000000-0000-0000-0000-000000000001",
-        "email": "u@example.com",
-        "display_name": "u",
-    })
+    httpx_mock.add_response(
+        method="GET",
+        url=f"{BASE_URL}/me",
+        json={
+            "id": "00000000-0000-0000-0000-000000000001",
+            "email": "u@example.com",
+            "display_name": "u",
+        },
+    )
 
     with OnsettoClient(ClientConfig(ONSETTO_API_BASE_URL=BASE_URL)) as c:
         c._access_token = "tok"

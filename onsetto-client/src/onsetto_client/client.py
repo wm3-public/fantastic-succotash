@@ -4,6 +4,7 @@ from typing import Any
 from uuid import UUID
 
 import httpx
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_random_exponential
 
 from .config import ClientConfig
 from .exceptions import (
@@ -13,6 +14,7 @@ from .exceptions import (
     RateLimitError,
 )
 from .models.input_models import (
+    AuthRequest,
     BankAccountUpdate,
     MFARequest,
     OrderCreate,
@@ -72,12 +74,12 @@ class OnsettoClient:
         """Close the client."""
         self._http.close()
 
-    # @retry(
-    #     retry=retry_if_exception_type(RateLimitError),
-    #     wait=wait_fixed(2),
-    #     stop=stop_after_attempt(3),
-    #     reraise=True,
-    # )
+    @retry(
+        retry=retry_if_exception_type(RateLimitError),
+        wait=wait_random_exponential(multiplier=1, min=1, max=10),
+        stop=stop_after_attempt(3),
+        reraise=True,
+    )
     def _request(
         self,
         method: str,
@@ -87,6 +89,10 @@ class OnsettoClient:
         auth: bool = True,
     ) -> Any:
         """Handle any request running through the client.
+
+        NOTE: Using tenacity deccorator for retries + exponential backoff on
+        failures. Should try 3 times in total with some jitter in the backoff
+        to prevent thundering herds.
 
         Args:
             method (str): The method of the request
@@ -136,7 +142,7 @@ class OnsettoClient:
         auth_request = self._request(
             "POST",
             "/auth/token",
-            json={"email": email, "password": password},
+            json=AuthRequest(email=email, password=password).model_dump(),
             auth=False,
         )
         auth_response = AuthResponse.model_validate(auth_request)
@@ -144,9 +150,7 @@ class OnsettoClient:
         mfa_request = self._request(
             "POST",
             "/auth/mfa/verify",
-            json=MFARequest(
-                mfa_token=auth_response.mfa_token, code=mfa_code
-            ).model_dump(),
+            json=MFARequest(mfa_token=auth_response.mfa_token, code=mfa_code).model_dump(),
             auth=False,
         )
         mfa_response = MFAResponse.model_validate(mfa_request)
@@ -156,36 +160,53 @@ class OnsettoClient:
         return mfa_response
 
     def create_order(self, listing_id: UUID | str) -> OrderResponse:
-        body = OrderCreate(
-            listing_id=UUID(str(listing_id))
-            if isinstance(listing_id, str)
-            else listing_id
-        )
-        return OrderResponse.model_validate(
-            self._request("POST", "/orders", json=body.model_dump(mode="json"))
-        )
+        """Create an order for the listing specified.
+
+        Args:
+            listing_id (UUID or str): The ID of the listing to order
+
+        Return:
+            the OrderResponse from the API
+        """
+        body = OrderCreate(listing_id=UUID(str(listing_id)) if isinstance(listing_id, str) else listing_id)
+        return OrderResponse.model_validate(self._request("POST", "/orders", json=body.model_dump(mode="json")))
 
     def get_me(self) -> UserProfileResponse:
+        """Get the current authenticated user's profile.
+
+        Return:
+            UserProfile response from the API
+        """
         return UserProfileResponse.model_validate(self._request("GET", "/me"))
 
     def get_listings(self) -> list[ListingResponse]:
-        return [
-            ListingResponse.model_validate(item)
-            for item in self._request("GET", "/listings")
-        ]
+        """Get a list of all of the listings in the marketplace.
+
+        Return:
+            list of ListingResponse objects from the API
+        """
+        return [ListingResponse.model_validate(item) for item in self._request("GET", "/listings")]
 
     def get_orders(self) -> list[OrderResponse]:
-        return [
-            OrderResponse.model_validate(item)
-            for item in self._request("GET", "/orders")
-        ]
+        """Get the list of orders for the current authenticated user.
 
-    def update_banking(
-        self, routing_number: str, account_number: str
-    ) -> BankAccountUpdatedResponse:
-        body = BankAccountUpdate(
-            routing_number=routing_number, account_number=account_number
-        )
+        Return:
+            list of OrderResponse objects from the API
+        """
+        return [OrderResponse.model_validate(item) for item in self._request("GET", "/orders")]
+
+    def update_banking(self, routing_number: str, account_number: str) -> BankAccountUpdatedResponse:
+        """Update the bank account information for the current authenticated
+        user.
+
+        Args:
+            routing_number (str): The new routing number to update to
+            account_number (str): The new account number to update to
+
+        Return:
+            the BankAccountUpdatedResponse object from the API
+        """
+        body = BankAccountUpdate(routing_number=routing_number, account_number=account_number)
         return BankAccountUpdatedResponse.model_validate(
             self._request("PUT", "/account/banking", json=body.model_dump())
         )
@@ -198,6 +219,18 @@ class OnsettoClient:
         exp_year: int,
         cvc: str,
     ) -> PaymentMethodResponse:
+        """Update the current authenticated user's method of payment.
+
+        Args:
+            cardholder_name (str): The name on the credit card
+            card_number (str): The credit card number
+            exp_month (int): The expiration month on the card (2 digits)
+            exp_year (int): The expiration year on the card (4 digits)
+            cvc (str): The CVC on the card
+
+        Return:
+            The PaymentMethodResponse object from the API
+        """
         body = PaymentMethodUpdate(
             cardholder_name=cardholder_name,
             card_number=card_number,
@@ -205,6 +238,4 @@ class OnsettoClient:
             exp_year=exp_year,
             cvc=cvc,
         )
-        return PaymentMethodResponse.model_validate(
-            self._request("PUT", "/account/payment", json=body.model_dump())
-        )
+        return PaymentMethodResponse.model_validate(self._request("PUT", "/account/payment", json=body.model_dump()))

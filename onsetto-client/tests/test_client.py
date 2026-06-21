@@ -2,12 +2,11 @@ import json
 import uuid
 
 import pytest
-from pytest_httpx import HTTPXMock
-
 from onsetto_client import (
-    OnsettoClient,
     APIError,
     AuthenticationError,
+    NotAuthenticatedError,
+    OnsettoClient,
     RateLimitError,
 )
 from onsetto_client.models.enums import OrderStatus
@@ -18,6 +17,7 @@ from onsetto_client.models.output_models import (
     PaymentMethodResponse,
     UserProfileResponse,
 )
+from pytest_httpx import HTTPXMock
 
 BASE_URL = "http://test"
 
@@ -26,10 +26,6 @@ LISTING_ID = "00000000-0000-0000-0000-000000000002"
 SELLER_ID = "00000000-0000-0000-0000-000000000003"
 ORDER_ID = "00000000-0000-0000-0000-000000000004"
 
-
-# ---------------------------------------------------------------------------
-# get_me
-# ---------------------------------------------------------------------------
 
 def test_get_me_returns_profile(httpx_mock: HTTPXMock, client: OnsettoClient) -> None:
     httpx_mock.add_response(
@@ -59,17 +55,12 @@ def test_get_me_sends_bearer_token(httpx_mock: HTTPXMock, client: OnsettoClient)
     assert request.headers["Authorization"] == "Bearer test-access-token"
 
 
-# ---------------------------------------------------------------------------
-# get_listings
-# ---------------------------------------------------------------------------
-
 def test_get_listings_returns_list(httpx_mock: HTTPXMock, client: OnsettoClient) -> None:
     httpx_mock.add_response(
         method="GET",
         url=f"{BASE_URL}/listings",
         json=[
-            {"id": LISTING_ID, "category": "electronics", "seller_id": SELLER_ID,
-             "title": "Widget", "price": 9.99},
+            {"id": LISTING_ID, "category": "electronics", "seller_id": SELLER_ID, "title": "Widget", "price": 9.99},
         ],
     )
 
@@ -85,10 +76,6 @@ def test_get_listings_empty(httpx_mock: HTTPXMock, client: OnsettoClient) -> Non
     httpx_mock.add_response(method="GET", url=f"{BASE_URL}/listings", json=[])
     assert client.get_listings() == []
 
-
-# ---------------------------------------------------------------------------
-# get_orders
-# ---------------------------------------------------------------------------
 
 def test_get_orders_returns_list(httpx_mock: HTTPXMock, client: OnsettoClient) -> None:
     httpx_mock.add_response(
@@ -118,10 +105,6 @@ def test_get_orders_pending_status(httpx_mock: HTTPXMock, client: OnsettoClient)
 
     assert result[0].status == OrderStatus.PENDING
 
-
-# ---------------------------------------------------------------------------
-# create_order
-# ---------------------------------------------------------------------------
 
 def test_create_order_returns_response(httpx_mock: HTTPXMock, client: OnsettoClient) -> None:
     httpx_mock.add_response(
@@ -163,10 +146,6 @@ def test_create_order_accepts_uuid_object(httpx_mock: HTTPXMock, client: Onsetto
     assert isinstance(result, OrderResponse)
 
 
-# ---------------------------------------------------------------------------
-# update_banking
-# ---------------------------------------------------------------------------
-
 def test_update_banking_returns_response(httpx_mock: HTTPXMock, client: OnsettoClient) -> None:
     httpx_mock.add_response(
         method="PUT",
@@ -195,10 +174,6 @@ def test_update_banking_sends_correct_body(httpx_mock: HTTPXMock, client: Onsett
     assert body["routing_number"] == "021000021"
     assert body["account_number"] == "1234567890"
 
-
-# ---------------------------------------------------------------------------
-# update_payment
-# ---------------------------------------------------------------------------
 
 def test_update_payment_returns_response(httpx_mock: HTTPXMock, client: OnsettoClient) -> None:
     httpx_mock.add_response(
@@ -233,10 +208,6 @@ def test_update_payment_sends_correct_body(httpx_mock: HTTPXMock, client: Onsett
     assert body["cvc"] == "123"
 
 
-# ---------------------------------------------------------------------------
-# Error handling (exercised via get_me for brevity)
-# ---------------------------------------------------------------------------
-
 def test_401_raises_authentication_error(httpx_mock: HTTPXMock, client: OnsettoClient) -> None:
     httpx_mock.add_response(
         method="GET",
@@ -252,17 +223,19 @@ def test_401_raises_authentication_error(httpx_mock: HTTPXMock, client: OnsettoC
 
 
 def test_429_raises_rate_limit_error(httpx_mock: HTTPXMock, client: OnsettoClient) -> None:
-    httpx_mock.add_response(
-        method="GET",
-        url=f"{BASE_URL}/me",
-        status_code=429,
-        json={"message": "Too many requests"},
-    )
+    for _ in range(3):
+        httpx_mock.add_response(
+            method="GET",
+            url=f"{BASE_URL}/me",
+            status_code=429,
+            json={"message": "Too many requests"},
+        )
 
     with pytest.raises(RateLimitError) as exc_info:
         client.get_me()
 
     assert exc_info.value.status_code == 429
+    assert len(httpx_mock.get_requests()) == 3
 
 
 def test_5xx_raises_api_error(httpx_mock: HTTPXMock, client: OnsettoClient) -> None:
@@ -296,7 +269,9 @@ def test_error_without_json_body(httpx_mock: HTTPXMock, client: OnsettoClient) -
 
 
 def test_error_json_without_message_key_uses_text(httpx_mock: HTTPXMock, client: OnsettoClient) -> None:
-    # When the error body is valid JSON but has no "message" key, detail falls back to response.text
+    """Test when the error body is valid JSON but has no "message" key, detail
+    falls back to response.text.
+    """
     httpx_mock.add_response(
         method="GET",
         url=f"{BASE_URL}/me",
@@ -313,11 +288,13 @@ def test_error_json_without_message_key_uses_text(httpx_mock: HTTPXMock, client:
 
 def test_reauthentication_replaces_token(httpx_mock: HTTPXMock, client: OnsettoClient) -> None:
     httpx_mock.add_response(
-        method="POST", url=f"{BASE_URL}/auth/token",
+        method="POST",
+        url=f"{BASE_URL}/auth/token",
         json={"mfa_required": True, "mfa_token": "mfa_new", "message": "MFA required"},
     )
     httpx_mock.add_response(
-        method="POST", url=f"{BASE_URL}/auth/mfa/verify",
+        method="POST",
+        url=f"{BASE_URL}/auth/mfa/verify",
         json={"access_token": "new-token", "token_type": "Bearer", "expires_in": 3600, "refresh_token": "r2"},
     )
 
@@ -327,13 +304,15 @@ def test_reauthentication_replaces_token(httpx_mock: HTTPXMock, client: OnsettoC
 
 
 def test_auth_endpoints_send_no_authorization_header(httpx_mock: HTTPXMock, client: OnsettoClient) -> None:
-    # /auth/token and /auth/mfa/verify use auth=False — no Bearer header should be sent
+    """Test /auth/token and /auth/mfa/verify use auth=False"""
     httpx_mock.add_response(
-        method="POST", url=f"{BASE_URL}/auth/token",
+        method="POST",
+        url=f"{BASE_URL}/auth/token",
         json={"mfa_required": True, "mfa_token": "mfa_t", "message": "ok"},
     )
     httpx_mock.add_response(
-        method="POST", url=f"{BASE_URL}/auth/mfa/verify",
+        method="POST",
+        url=f"{BASE_URL}/auth/mfa/verify",
         json={"access_token": "tok", "token_type": "Bearer", "expires_in": 3600, "refresh_token": "r"},
     )
 
@@ -344,8 +323,6 @@ def test_auth_endpoints_send_no_authorization_header(httpx_mock: HTTPXMock, clie
 
 
 def test_unauthenticated_client_raises_on_all_methods(unauthenticated_client: OnsettoClient) -> None:
-    from onsetto_client import NotAuthenticatedError
-    import uuid
 
     with pytest.raises(NotAuthenticatedError):
         unauthenticated_client.get_listings()
